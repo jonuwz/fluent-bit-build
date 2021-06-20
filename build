@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VER=${1:1.7.9}
+VER=${1:-"1.7.9"}
 
 sudo apt-get update && sudo apt-get install -y --no-install-recommends \
     build-essential \
@@ -17,27 +17,35 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends \
     libpq-dev \
     postgresql-server-dev-all \
     flex \
-    bison
+    bison \
+    ruby
 
-DLDIR="fluent-bit_${VER}"
+sudo gem install fpm
+
+DLDIR="work/fluent-bit_${VER}"
+mkdir -p work
+
+echo -e "\n BUILDING $DLDIR\n\n"
 
 [[ -e $DLDIR ]] || git clone --depth 1 --branch v${VER} https://github.com/fluent/fluent-bit ${DLDIR}
 
-(
+if [[ ! -e "$DLDIR/build/bin/fluent-bit" ]];then
+  (
   cd $DLDIR/build
   cmake -DFLB_RELEASE=On \
-          -DFLB_TRACE=Off \
-          -DFLB_JEMALLOC=On \
-          -DFLB_TLS=On \
-          -DFLB_SHARED_LIB=Off \
-          -DFLB_EXAMPLES=Off \
-          -DFLB_HTTP_SERVER=On \
-          -DFLB_IN_SYSTEMD=On \
-          -DFLB_OUT_KAFKA=On \
-          -DFLB_OUT_PGSQL=On ..
+        -DFLB_TRACE=Off \
+        -DFLB_JEMALLOC=On \
+        -DFLB_TLS=On \
+        -DFLB_SHARED_LIB=Off \
+        -DFLB_EXAMPLES=Off \
+        -DFLB_HTTP_SERVER=On \
+        -DFLB_IN_SYSTEMD=On \
+        -DFLB_OUT_KAFKA=On \
+        -DFLB_OUT_PGSQL=On ..
 
   make -j $(getconf _NPROCESSORS_ONLN)
-)
+  )
+fi
 
 rm -f fluent-bit*.deb
 
@@ -49,10 +57,10 @@ fpm -t deb -s dir -n fluent-bit -v ${VER} \
   --deb-systemd assets/fluent-bit.service \
   --deb-systemd-enable \
   --deb-systemd-auto-start \
-  $DLDIR/build/bin/fluent-bit=/opt/fluent-bit/bin \
-  assets/bin/append_tag.lua=/opt/fluent-bit/bin \
+  $DLDIR/build/bin/fluent-bit=/opt/fluent-bit/bin/fluent-bit \
+  assets/bin/append_tag.lua=/opt/fluent-bit/bin/append_tag.lua \
   assets/etc/=/etc/fluent-bit \
-  $DLDIR/conf/parsers.conf=/etc/fluent-bit/parsers.d \
-  $DLDIR/conf/parsers_extra.conf=/etc/fluent-bit/parsers.d \
-  $DLDIR/conf/parsers_java.conf=/etc/fluent-bit/parsers.d 
+  $DLDIR/conf/parsers.conf=/etc/fluent-bit/parsers.d/parsers.conf \
+  $DLDIR/conf/parsers_extra.conf=/etc/fluent-bit/parsers.d/parsers_extra.conf \
+  $DLDIR/conf/parsers_java.conf=/etc/fluent-bit/parsers.d/parsers_java.conf
 
